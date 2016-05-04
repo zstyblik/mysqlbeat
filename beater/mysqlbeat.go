@@ -81,74 +81,72 @@ func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
 	var err error
 	bt.done = make(chan struct{})
 
-	if len(bt.beatConfig.Mysqlbeat.Queries) > 0 {
-
-		oldvalues := common.MapStr{"mysqlbeat": "init"}
-		oldvaluesage := common.MapStr{"mysqlbeat": "init"}
-
-		bt.oldvalues = oldvalues
-		bt.oldvaluesage = oldvaluesage
-
-		// Setting default period if not set
-		if bt.beatConfig.Mysqlbeat.Period == "" {
-			bt.beatConfig.Mysqlbeat.Period = "10s"
-		}
-
-		if bt.beatConfig.Mysqlbeat.DeltaWildCard == "" {
-			bt.beatConfig.Mysqlbeat.DeltaWildCard = "__DELTA"
-		}
-
-		if len(bt.beatConfig.Mysqlbeat.Queries) != len(bt.beatConfig.Mysqlbeat.QueryTypes) {
-			err := fmt.Errorf("error on config file, queries array length != querytypes array length (each query should have a corresponding type on the same index)")
-			return err
-		}
-
-		bt.queries = bt.beatConfig.Mysqlbeat.Queries
-		bt.querytypes = bt.beatConfig.Mysqlbeat.QueryTypes
-
-		logp.Info("Total # of queries to execute: %d", len(bt.queries))
-
-		for index, queryStr := range bt.queries {
-			logp.Info("Query #%d (type: %s): %s", index+1, bt.querytypes[index], queryStr)
-		}
-
-		bt.period, err = time.ParseDuration(bt.beatConfig.Mysqlbeat.Period)
-		if err != nil {
-			return err
-		}
-
-		if bt.beatConfig.Mysqlbeat.Hostname == "" {
-			logp.Info("Hostname not selected, proceeding with '127.0.0.1' as default")
-			bt.beatConfig.Mysqlbeat.Hostname = "127.0.0.1"
-		}
-
-		if bt.beatConfig.Mysqlbeat.Port == "" {
-			logp.Info("Port not selected, proceeding with '3306' as default")
-			bt.beatConfig.Mysqlbeat.Port = "3306"
-		}
-
-		if bt.beatConfig.Mysqlbeat.Username == "" {
-			logp.Info("Username not selected, proceeding with 'mysqlbeat_user' as default")
-			bt.beatConfig.Mysqlbeat.Username = "mysqlbeat_user"
-		}
-
-		if bt.beatConfig.Mysqlbeat.Password != nil {
-			bt.password = *bt.beatConfig.Mysqlbeat.Password
-		} else {
-			bt.password = "mysqlbeat_pass"
-			logp.Info("Password not selected, proceeding with 'mysqlbeat_pass' as default")
-		}
-
-		bt.hostname = bt.beatConfig.Mysqlbeat.Hostname
-		bt.port = bt.beatConfig.Mysqlbeat.Port
-		bt.username = bt.beatConfig.Mysqlbeat.Username
-		bt.deltawildcard = bt.beatConfig.Mysqlbeat.DeltaWildCard
-
-	} else {
-
+	if len(bt.beatConfig.Mysqlbeat.Queries) < 1 {
 		err := fmt.Errorf("there are no queries to execute")
 		return err
 	}
+
+	oldvalues := common.MapStr{"mysqlbeat": "init"}
+	oldvaluesage := common.MapStr{"mysqlbeat": "init"}
+
+	bt.oldvalues = oldvalues
+	bt.oldvaluesage = oldvaluesage
+
+	// Setting default period if not set
+	if bt.beatConfig.Mysqlbeat.Period == "" {
+		bt.beatConfig.Mysqlbeat.Period = "10s"
+	}
+
+	if bt.beatConfig.Mysqlbeat.DeltaWildCard == "" {
+		bt.beatConfig.Mysqlbeat.DeltaWildCard = "__DELTA"
+	}
+
+	if len(bt.beatConfig.Mysqlbeat.Queries) != len(bt.beatConfig.Mysqlbeat.QueryTypes) {
+		err := fmt.Errorf("error on config file, queries array length != querytypes array length (each query should have a corresponding type on the same index)")
+		return err
+	}
+
+	bt.queries = bt.beatConfig.Mysqlbeat.Queries
+	bt.querytypes = bt.beatConfig.Mysqlbeat.QueryTypes
+
+	logp.Info("Total # of queries to execute: %d", len(bt.queries))
+
+	for index, queryStr := range bt.queries {
+		logp.Info("Query #%d (type: %s): %s", index+1, bt.querytypes[index], queryStr)
+	}
+
+	bt.period, err = time.ParseDuration(bt.beatConfig.Mysqlbeat.Period)
+	if err != nil {
+		return err
+	}
+
+	if bt.beatConfig.Mysqlbeat.Hostname == "" {
+		logp.Info("Hostname not selected, proceeding with '127.0.0.1' as default")
+		bt.beatConfig.Mysqlbeat.Hostname = "127.0.0.1"
+	}
+
+	if bt.beatConfig.Mysqlbeat.Port == "" {
+		logp.Info("Port not selected, proceeding with '3306' as default")
+		bt.beatConfig.Mysqlbeat.Port = "3306"
+	}
+
+	if bt.beatConfig.Mysqlbeat.Username == "" {
+		logp.Info("Username not selected, proceeding with 'mysqlbeat_user' as default")
+		bt.beatConfig.Mysqlbeat.Username = "mysqlbeat_user"
+	}
+
+	if bt.beatConfig.Mysqlbeat.Password != nil {
+		bt.password = *bt.beatConfig.Mysqlbeat.Password
+	} else {
+		bt.password = "mysqlbeat_pass"
+		logp.Info("Password not selected, proceeding with 'mysqlbeat_pass' as default")
+	}
+
+	bt.hostname = bt.beatConfig.Mysqlbeat.Hostname
+	bt.port = bt.beatConfig.Mysqlbeat.Port
+	bt.username = bt.beatConfig.Mysqlbeat.Username
+	bt.deltawildcard = bt.beatConfig.Mysqlbeat.DeltaWildCard
+
 	return nil
 }
 
