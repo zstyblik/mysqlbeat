@@ -19,6 +19,15 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+const (
+	defaultPeriod        = 10 * time.Second
+	defaultMySQLHost     = "localhost"
+	defaultMySQLPort     = 3306
+	defaultMySQLUser     = "mysqlbeat_user"
+	defaultMySQLPass     = "mysqlbeat_password"
+	defaultDeltaWildCard = "__DELTA"
+)
+
 // Mysqlbeat  is a struct tol hold the beat config & info
 type Mysqlbeat struct {
 	beatConfig    *config.Config
@@ -62,13 +71,13 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 	if bt.beatConfig.Mysqlbeat.Period != nil {
 		bt.period = time.Duration(*bt.beatConfig.Mysqlbeat.Period) * time.Second
 	} else {
-		bt.period = 10 * time.Second
+		bt.period = defaultPeriod
 	}
 
 	if bt.beatConfig.Mysqlbeat.DeltaWildCard != nil {
 		bt.deltawildcard = *bt.beatConfig.Mysqlbeat.DeltaWildCard
 	} else {
-		bt.deltawildcard = "__DELTA"
+		bt.deltawildcard = defaultDeltaWildCard
 	}
 
 	if len(*bt.beatConfig.Mysqlbeat.Queries) != len(*bt.beatConfig.Mysqlbeat.QueryTypes) {
@@ -88,28 +97,31 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 	if bt.beatConfig.Mysqlbeat.Hostname != nil {
 		bt.hostname = *bt.beatConfig.Mysqlbeat.Hostname
 	} else {
-		logp.Info("Hostname not selected, proceeding with '127.0.0.1' as default")
-		bt.hostname = "127.0.0.1"
+		bt.hostname = defaultMySQLHost
+		logp.Info("Hostname not selected, proceeding with '%v' as default",
+			bt.hostname)
 	}
 
 	if bt.beatConfig.Mysqlbeat.Username != nil {
 		bt.username = *bt.beatConfig.Mysqlbeat.Username
 	} else {
-		logp.Info("Username not selected, proceeding with 'mysqlbeat_user' as default")
-		bt.username = "mysqlbeat_user"
+		bt.username = defaultMySQLUser
+		logp.Info("Username not selected, proceeding with '%v' as default",
+			defaultMySQLUser)
 	}
 
 	if bt.beatConfig.Mysqlbeat.Password != nil {
 		bt.password = *bt.beatConfig.Mysqlbeat.Password
 	} else {
-		bt.password = "mysqlbeat_pass"
-		logp.Info("Password not selected, proceeding with 'mysqlbeat_pass' as default")
+		bt.password = defaultMySQLPass
+		logp.Info("Password not selected, proceeding with '%v' as default",
+			defaultMySQLPass)
 	}
 
 	if bt.beatConfig.Mysqlbeat.Port != nil {
 		bt.port = *bt.beatConfig.Mysqlbeat.Port
 	} else {
-		bt.port = 3306
+		bt.port = defaultMySQLPort
 	}
 
 	return nil
