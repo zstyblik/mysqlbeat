@@ -60,13 +60,36 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 		return fmt.Errorf("Error reading config file: %v", err)
 	}
 
-	if len(*bt.beatConfig.Mysqlbeat.Queries) < 1 {
+	bt.oldvalues = common.MapStr{"mysqlbeat": "init"}
+	bt.oldvaluesage = common.MapStr{"mysqlbeat": "init"}
+
+	if bt.beatConfig.Mysqlbeat.Queries != nil {
+		bt.queries = *bt.beatConfig.Mysqlbeat.Queries
+	} else {
+		bt.queries = []string{}
+	}
+
+	if len(bt.queries) < 1 {
 		err := fmt.Errorf("there are no queries to execute")
 		return err
 	}
 
-	bt.oldvalues = common.MapStr{"mysqlbeat": "init"}
-	bt.oldvaluesage = common.MapStr{"mysqlbeat": "init"}
+	if bt.beatConfig.Mysqlbeat.QueryTypes != nil {
+		bt.querytypes = *bt.beatConfig.Mysqlbeat.QueryTypes
+	} else {
+		bt.querytypes = []string{}
+	}
+
+	if len(bt.queries) != len(bt.querytypes) {
+		err := fmt.Errorf("error on config file, queries array length != querytypes array length (each query should have a corresponding type on the same index)")
+		return err
+	}
+
+	logp.Info("Total # of queries to execute: %d", len(bt.queries))
+
+	for index, queryStr := range bt.queries {
+		logp.Info("Query #%d (type: %s): %s", index+1, bt.querytypes[index], queryStr)
+	}
 
 	if bt.beatConfig.Mysqlbeat.Period != nil {
 		bt.period = time.Duration(*bt.beatConfig.Mysqlbeat.Period) * time.Second
@@ -78,20 +101,6 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 		bt.deltawildcard = *bt.beatConfig.Mysqlbeat.DeltaWildCard
 	} else {
 		bt.deltawildcard = defaultDeltaWildCard
-	}
-
-	if len(*bt.beatConfig.Mysqlbeat.Queries) != len(*bt.beatConfig.Mysqlbeat.QueryTypes) {
-		err := fmt.Errorf("error on config file, queries array length != querytypes array length (each query should have a corresponding type on the same index)")
-		return err
-	}
-
-	bt.queries = *bt.beatConfig.Mysqlbeat.Queries
-	bt.querytypes = *bt.beatConfig.Mysqlbeat.QueryTypes
-
-	logp.Info("Total # of queries to execute: %d", len(bt.queries))
-
-	for index, queryStr := range bt.queries {
-		logp.Info("Query #%d (type: %s): %s", index+1, bt.querytypes[index], queryStr)
 	}
 
 	if bt.beatConfig.Mysqlbeat.Hostname != nil {
