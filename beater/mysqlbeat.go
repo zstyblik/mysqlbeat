@@ -53,33 +53,6 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 		return fmt.Errorf("Error reading config file: %v", err)
 	}
 
-	return nil
-}
-
-// base64Decode returns text decoded with base64
-func base64Decode(src []byte) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(string(src))
-}
-
-// roundF2I is a function that returns a rounded int64 from a float64
-func roundF2I(val float64, roundOn float64) (newVal int64) {
-	var round float64
-
-	digit := val
-	_, div := math.Modf(digit)
-	if div >= roundOn {
-		round = math.Ceil(digit)
-	} else {
-		round = math.Floor(digit)
-	}
-
-	return int64(round)
-}
-
-// Setup is a function to setup all beat config & info into the beat struct
-func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
-	bt.done = make(chan struct{})
-
 	if len(bt.beatConfig.Mysqlbeat.Queries) < 1 {
 		err := fmt.Errorf("there are no queries to execute")
 		return err
@@ -141,6 +114,32 @@ func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
 	bt.username = bt.beatConfig.Mysqlbeat.Username
 	bt.deltawildcard = bt.beatConfig.Mysqlbeat.DeltaWildCard
 
+	return nil
+}
+
+// base64Decode returns text decoded with base64
+func base64Decode(src []byte) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(string(src))
+}
+
+// roundF2I is a function that returns a rounded int64 from a float64
+func roundF2I(val float64, roundOn float64) (newVal int64) {
+	var round float64
+
+	digit := val
+	_, div := math.Modf(digit)
+	if div >= roundOn {
+		round = math.Ceil(digit)
+	} else {
+		round = math.Floor(digit)
+	}
+
+	return int64(round)
+}
+
+// Setup is a function to setup all beat config & info into the beat struct
+func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
+	bt.done = make(chan struct{})
 	return nil
 }
 
