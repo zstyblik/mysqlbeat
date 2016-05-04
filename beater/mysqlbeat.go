@@ -78,7 +78,6 @@ func roundF2I(val float64, roundOn float64) (newVal int64) {
 
 // Setup is a function to setup all beat config & info into the beat struct
 func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
-	var err error
 	bt.done = make(chan struct{})
 
 	if len(bt.beatConfig.Mysqlbeat.Queries) < 1 {
@@ -92,9 +91,10 @@ func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
 	bt.oldvalues = oldvalues
 	bt.oldvaluesage = oldvaluesage
 
-	// Setting default period if not set
-	if bt.beatConfig.Mysqlbeat.Period == "" {
-		bt.beatConfig.Mysqlbeat.Period = "10s"
+	if bt.beatConfig.Mysqlbeat.Period != nil {
+		bt.period = time.Duration(*bt.beatConfig.Mysqlbeat.Period) * time.Second
+	} else {
+		bt.period = 10 * time.Second
 	}
 
 	if bt.beatConfig.Mysqlbeat.DeltaWildCard == "" {
@@ -113,11 +113,6 @@ func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
 
 	for index, queryStr := range bt.queries {
 		logp.Info("Query #%d (type: %s): %s", index+1, bt.querytypes[index], queryStr)
-	}
-
-	bt.period, err = time.ParseDuration(bt.beatConfig.Mysqlbeat.Period)
-	if err != nil {
-		return err
 	}
 
 	if bt.beatConfig.Mysqlbeat.Hostname == "" {

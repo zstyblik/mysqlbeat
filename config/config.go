@@ -8,7 +8,7 @@ type Config struct {
 }
 
 type MysqlbeatConfig struct {
-	Period        string   `yaml:"period"`
+	Period        *int64   `yaml:"period"`
 	Hostname      string   `yaml:"hostname"`
 	Port          string   `yaml:"port"`
 	Username      string   `yaml:"username"`

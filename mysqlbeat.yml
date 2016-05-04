@@ -3,8 +3,8 @@
 ############################# Mysqlbeat ######################################
 
 mysqlbeat:
-  # Defines how often an event is sent to the output
-  #period: 10s
+  # Defines how often an event is sent to the output in seconds
+  #period: 10
 
   # Defines the mysql hostname that the beat will connect to
   #hostname: "127.0.0.1"
