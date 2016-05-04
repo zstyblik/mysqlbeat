@@ -164,6 +164,7 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 	if err != nil {
 		return err
 	}
+	defer db.Close()
 
 	for index, queryStr := range bt.queries {
 		rows, err := db.Query(queryStr)
@@ -428,7 +429,6 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 			return err
 		}
 	}
-	defer db.Close()
 
 	return nil
 }
