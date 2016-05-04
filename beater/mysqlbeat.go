@@ -155,7 +155,6 @@ func (bt *Mysqlbeat) Run(b *beat.Beat) error {
 		}
 
 		err := bt.beat(b)
-
 		if err != nil {
 			return err
 		}
@@ -173,9 +172,7 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 	}
 
 	for index, queryStr := range bt.queries {
-
 		rows, err := db.Query(queryStr)
-
 		if err != nil {
 			return err
 		}
@@ -201,9 +198,7 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 		}
 
 		for rows.Next() {
-
 			currentRow++
-
 			if bt.querytypes[index] == "single-row" && currentRow == 1 {
 
 				err = rows.Scan(scanArgs...)
@@ -212,19 +207,16 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 				}
 
 				for i, col := range values {
-
 					strColName := string(columns[i])
 					strColValue := string(col)
 					strColType := "string"
 
 					nColValue, err := strconv.ParseInt(strColValue, 0, 64)
-
 					if err == nil {
 						strColType = "int"
 					}
 
 					fColValue, err := strconv.ParseFloat(strColValue, 64)
-
 					if err == nil {
 						if strColType == "string" {
 							strColType = "float"
@@ -232,12 +224,9 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 					}
 
 					if strings.HasSuffix(strColName, bt.deltawildcard) {
-
 						var exists bool
 						_, exists = bt.oldvalues[strColName]
-
 						if !exists {
-
 							bt.oldvaluesage[strColName] = dtNow
 
 							if strColType == "string" {
@@ -247,9 +236,7 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 							} else if strColType == "float" {
 								bt.oldvalues[strColName] = fColValue
 							}
-
 						} else {
-
 							if dtOld, ok := bt.oldvaluesage[strColName].(time.Time); ok {
 								delta := dtNow.Sub(dtOld)
 
@@ -257,7 +244,6 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 									var calcVal int64
 
 									oldVal, _ := bt.oldvalues[strColName].(int64)
-
 									if nColValue > oldVal {
 										var devRes float64
 										devRes = float64((nColValue - oldVal)) / float64(delta.Seconds())
@@ -270,12 +256,10 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 
 									bt.oldvalues[strColName] = nColValue
 									bt.oldvaluesage[strColName] = dtNow
-
 								} else if strColType == "float" {
 									var calcVal float64
 
 									oldVal, _ := bt.oldvalues[strColName].(float64)
-
 									if fColValue > oldVal {
 										calcVal = (fColValue - oldVal) / float64(delta.Seconds())
 									} else {
@@ -304,11 +288,8 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 				}
 
 				rows.Close()
-
 			} else if bt.querytypes[index] == "two-columns" {
-
 				err = rows.Scan(scanArgs...)
-
 				if err != nil {
 					return err
 				}
@@ -318,13 +299,11 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 				strColType := "string"
 
 				nColValue, err := strconv.ParseInt(strColValue, 0, 64)
-
 				if err == nil {
 					strColType = "int"
 				}
 
 				fColValue, err := strconv.ParseFloat(strColValue, 64)
-
 				if err == nil {
 					if strColType == "string" {
 						strColType = "float"
@@ -332,14 +311,11 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 				}
 
 				if strings.HasSuffix(strColName, bt.deltawildcard) {
-
 					var exists bool
 					_, exists = bt.oldvalues[strColName]
 
 					if !exists {
-
 						bt.oldvaluesage[strColName] = dtNow
-
 						if strColType == "string" {
 							bt.oldvalues[strColName] = strColValue
 						} else if strColType == "int" {
@@ -347,17 +323,13 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 						} else if strColType == "float" {
 							bt.oldvalues[strColName] = fColValue
 						}
-
 					} else {
-
 						if dtOld, ok := bt.oldvaluesage[strColName].(time.Time); ok {
 							delta := dtNow.Sub(dtOld)
-
 							if strColType == "int" {
 								var calcVal int64
 
 								oldVal, _ := bt.oldvalues[strColName].(int64)
-
 								if nColValue > oldVal {
 									var devRes float64
 									devRes = float64((nColValue - oldVal)) / float64(delta.Seconds())
@@ -373,12 +345,10 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 								bt.oldvaluesage[strColName] = dtNow
 
 								//logp.Info("DEBUG: o: %d n: %d time diff: %d calc: %d", oldVal, nColValue, int64(delta.Seconds()), calcVal)
-
 							} else if strColType == "float" {
 								var calcVal float64
 
 								oldVal, _ := bt.oldvalues[strColName].(float64)
-
 								if fColValue > oldVal {
 									calcVal = (fColValue - oldVal) / float64(delta.Seconds())
 								} else {
@@ -412,13 +382,11 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 				}
 
 				err = rows.Scan(scanArgs...)
-
 				if err != nil {
 					return err
 				}
 
 				for i, col := range values {
-
 					strColValue := string(col)
 					n, err := strconv.ParseInt(strColValue, 0, 64)
 
@@ -439,16 +407,13 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 				b.Events.PublishEvent(mevent)
 				logp.Info("Event sent")
 			} else if bt.querytypes[index] == "show-slave-delay" && currentRow == 1 {
-
 				err = rows.Scan(scanArgs...)
 				if err != nil {
 					return err
 				}
 
 				for i, col := range values {
-
 					if string(columns[i]) == "Seconds_Behind_Master" {
-
 						strColName := string(columns[i])
 						strColValue := string(col)
 
@@ -459,7 +424,6 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 						}
 					}
 					rows.Close()
-
 				}
 			}
 		}
