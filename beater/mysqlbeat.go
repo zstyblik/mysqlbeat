@@ -343,8 +343,6 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 
 								bt.oldvalues[strColName] = nColValue
 								bt.oldvaluesage[strColName] = dtNow
-
-								//logp.Info("DEBUG: o: %d n: %d time diff: %d calc: %d", oldVal, nColValue, int64(delta.Seconds()), calcVal)
 							} else if strColType == "float" {
 								var calcVal float64
 
@@ -359,7 +357,6 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 
 								bt.oldvalues[strColName] = fColValue
 								bt.oldvaluesage[strColName] = dtNow
-
 							} else {
 								event[strColName] = strColValue
 							}
