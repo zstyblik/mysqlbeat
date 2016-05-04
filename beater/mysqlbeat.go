@@ -53,7 +53,7 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 		return fmt.Errorf("Error reading config file: %v", err)
 	}
 
-	if len(bt.beatConfig.Mysqlbeat.Queries) < 1 {
+	if len(*bt.beatConfig.Mysqlbeat.Queries) < 1 {
 		err := fmt.Errorf("there are no queries to execute")
 		return err
 	}
@@ -70,17 +70,19 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 		bt.period = 10 * time.Second
 	}
 
-	if bt.beatConfig.Mysqlbeat.DeltaWildCard == "" {
-		bt.beatConfig.Mysqlbeat.DeltaWildCard = "__DELTA"
+	if bt.beatConfig.Mysqlbeat.DeltaWildCard != nil {
+		bt.deltawildcard = *bt.beatConfig.Mysqlbeat.DeltaWildCard
+	} else {
+		bt.deltawildcard = "__DELTA"
 	}
 
-	if len(bt.beatConfig.Mysqlbeat.Queries) != len(bt.beatConfig.Mysqlbeat.QueryTypes) {
+	if len(*bt.beatConfig.Mysqlbeat.Queries) != len(*bt.beatConfig.Mysqlbeat.QueryTypes) {
 		err := fmt.Errorf("error on config file, queries array length != querytypes array length (each query should have a corresponding type on the same index)")
 		return err
 	}
 
-	bt.queries = bt.beatConfig.Mysqlbeat.Queries
-	bt.querytypes = bt.beatConfig.Mysqlbeat.QueryTypes
+	bt.queries = *bt.beatConfig.Mysqlbeat.Queries
+	bt.querytypes = *bt.beatConfig.Mysqlbeat.QueryTypes
 
 	logp.Info("Total # of queries to execute: %d", len(bt.queries))
 
@@ -88,14 +90,18 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 		logp.Info("Query #%d (type: %s): %s", index+1, bt.querytypes[index], queryStr)
 	}
 
-	if bt.beatConfig.Mysqlbeat.Hostname == "" {
+	if bt.beatConfig.Mysqlbeat.Hostname != nil {
+		bt.hostname = *bt.beatConfig.Mysqlbeat.Hostname
+	} else {
 		logp.Info("Hostname not selected, proceeding with '127.0.0.1' as default")
-		bt.beatConfig.Mysqlbeat.Hostname = "127.0.0.1"
+		bt.hostname = "127.0.0.1"
 	}
 
-	if bt.beatConfig.Mysqlbeat.Username == "" {
+	if bt.beatConfig.Mysqlbeat.Username != nil {
+		bt.username = *bt.beatConfig.Mysqlbeat.Username
+	} else {
 		logp.Info("Username not selected, proceeding with 'mysqlbeat_user' as default")
-		bt.beatConfig.Mysqlbeat.Username = "mysqlbeat_user"
+		bt.username = "mysqlbeat_user"
 	}
 
 	if bt.beatConfig.Mysqlbeat.Password != nil {
@@ -105,14 +111,11 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 		logp.Info("Password not selected, proceeding with 'mysqlbeat_pass' as default")
 	}
 
-	bt.hostname = bt.beatConfig.Mysqlbeat.Hostname
 	if bt.beatConfig.Mysqlbeat.Port != nil {
 		bt.port = *bt.beatConfig.Mysqlbeat.Port
 	} else {
 		bt.port = 3306
 	}
-	bt.username = bt.beatConfig.Mysqlbeat.Username
-	bt.deltawildcard = bt.beatConfig.Mysqlbeat.DeltaWildCard
 
 	return nil
 }
