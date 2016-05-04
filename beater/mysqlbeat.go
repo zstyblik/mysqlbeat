@@ -39,9 +39,7 @@ type Mysqlbeat struct {
 
 // New Creates beater
 func New() *Mysqlbeat {
-	return &Mysqlbeat{
-		done: make(chan struct{}),
-	}
+	return &Mysqlbeat{}
 }
 
 /// *** Beater interface methods ***///
@@ -80,8 +78,8 @@ func roundF2I(val float64, roundOn float64) (newVal int64) {
 
 // Setup is a function to setup all beat config & info into the beat struct
 func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
-
 	var err error
+	bt.done = make(chan struct{})
 
 	if len(bt.beatConfig.Mysqlbeat.Queries) > 0 {
 
