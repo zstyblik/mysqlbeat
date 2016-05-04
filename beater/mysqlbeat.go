@@ -46,7 +46,6 @@ func New() *Mysqlbeat {
 
 // Config is a function to read config file
 func (bt *Mysqlbeat) Config(b *beat.Beat) error {
-
 	// Load beater beatConfig
 	err := cfgfile.Read(&bt.beatConfig, "")
 	if err != nil {
@@ -58,11 +57,8 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 		return err
 	}
 
-	oldvalues := common.MapStr{"mysqlbeat": "init"}
-	oldvaluesage := common.MapStr{"mysqlbeat": "init"}
-
-	bt.oldvalues = oldvalues
-	bt.oldvaluesage = oldvaluesage
+	bt.oldvalues = common.MapStr{"mysqlbeat": "init"}
+	bt.oldvaluesage = common.MapStr{"mysqlbeat": "init"}
 
 	if bt.beatConfig.Mysqlbeat.Period != nil {
 		bt.period = time.Duration(*bt.beatConfig.Mysqlbeat.Period) * time.Second
