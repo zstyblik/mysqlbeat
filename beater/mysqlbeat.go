@@ -26,7 +26,7 @@ type Mysqlbeat struct {
 	done          chan struct{}
 	period        time.Duration
 	hostname      string
-	port          string
+	port          int64
 	username      string
 	password      string
 	queries       []string
@@ -120,11 +120,6 @@ func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
 		bt.beatConfig.Mysqlbeat.Hostname = "127.0.0.1"
 	}
 
-	if bt.beatConfig.Mysqlbeat.Port == "" {
-		logp.Info("Port not selected, proceeding with '3306' as default")
-		bt.beatConfig.Mysqlbeat.Port = "3306"
-	}
-
 	if bt.beatConfig.Mysqlbeat.Username == "" {
 		logp.Info("Username not selected, proceeding with 'mysqlbeat_user' as default")
 		bt.beatConfig.Mysqlbeat.Username = "mysqlbeat_user"
@@ -138,7 +133,11 @@ func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
 	}
 
 	bt.hostname = bt.beatConfig.Mysqlbeat.Hostname
-	bt.port = bt.beatConfig.Mysqlbeat.Port
+	if bt.beatConfig.Mysqlbeat.Port != nil {
+		bt.port = *bt.beatConfig.Mysqlbeat.Port
+	} else {
+		bt.port = 3306
+	}
 	bt.username = bt.beatConfig.Mysqlbeat.Username
 	bt.deltawildcard = bt.beatConfig.Mysqlbeat.DeltaWildCard
 
@@ -167,11 +166,10 @@ func (bt *Mysqlbeat) Run(b *beat.Beat) error {
 
 // readData is a function that connects to the mysql, runs the query and returns the data
 func (bt *Mysqlbeat) beat(b *beat.Beat) error {
-
-	connString := bt.username + ":" + bt.password + "@tcp(" + bt.hostname + ":" + bt.port + ")/"
+	connString := fmt.Sprintf("%v:%v@tcp(%v:%d)/", bt.username, bt.password,
+		bt.hostname, bt.port)
 
 	db, err := sql.Open("mysql", connString)
-
 	if err != nil {
 		return err
 	}

@@ -10,7 +10,7 @@ mysqlbeat:
   #hostname: "127.0.0.1"
 
   # Defines the mysql port
-  #port: "3306"
+  #port: 3306
 
   # MAKE SURE THE USER ONLY HAS PERMISSIONS TO RUN THE QUERY DESIRED AND NOTHING ELSE.
   # Defines the mysql user to use
