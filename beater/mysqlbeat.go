@@ -2,7 +2,6 @@ package beater
 
 import (
 	"database/sql"
-	"encoding/base64"
 	"fmt"
 	"math"
 	"strconv"
@@ -114,11 +113,6 @@ func (bt *Mysqlbeat) Config(b *beat.Beat) error {
 	}
 
 	return nil
-}
-
-// base64Decode returns text decoded with base64
-func base64Decode(src []byte) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(string(src))
 }
 
 // roundF2I is a function that returns a rounded int64 from a float64
