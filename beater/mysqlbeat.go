@@ -29,7 +29,6 @@ type Mysqlbeat struct {
 	port          string
 	username      string
 	password      string
-	password64    []byte
 	queries       []string
 	querytypes    []string
 	deltawildcard string
@@ -135,14 +134,8 @@ func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
 			bt.beatConfig.Mysqlbeat.Username = "mysqlbeat_user"
 		}
 
-		pwdbyte, err := base64Decode(bt.beatConfig.Mysqlbeat.Password64)
-
-		if err != nil {
-			return err
-		}
-
-		if string(pwdbyte) != "" {
-			bt.password = string(pwdbyte)
+		if bt.beatConfig.Mysqlbeat.Password != nil {
+			bt.password = *bt.beatConfig.Mysqlbeat.Password
 		} else {
 			bt.password = "mysqlbeat_pass"
 			logp.Info("Password not selected, proceeding with 'mysqlbeat_pass' as default")
