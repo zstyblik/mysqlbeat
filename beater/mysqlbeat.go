@@ -30,6 +30,7 @@ const (
 
 // Mysqlbeat  is a struct tol hold the beat config & info
 type Mysqlbeat struct {
+	Beat          *beat.Beat
 	beatConfig    *config.Config
 	done          chan struct{}
 	period        time.Duration
@@ -153,6 +154,7 @@ func roundF2I(val float64, roundOn float64) (newVal int64) {
 
 // Setup is a function to setup all beat config & info into the beat struct
 func (bt *Mysqlbeat) Setup(b *beat.Beat) error {
+	bt.Beat = b
 	bt.done = make(chan struct{})
 	return nil
 }
@@ -178,6 +180,7 @@ func (bt *Mysqlbeat) Run(b *beat.Beat) error {
 
 // readData is a function that connects to the mysql, runs the query and returns the data
 func (bt *Mysqlbeat) beat(b *beat.Beat) error {
+	var err error
 	connString := fmt.Sprintf("%v:%v@tcp(%v:%d)/", bt.username, bt.password,
 		bt.hostname, bt.port)
 
@@ -187,8 +190,10 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 	}
 	defer db.Close()
 
+	var rows *sql.Rows
 	for index, queryStr := range bt.queries {
-		rows, err := db.Query(queryStr)
+		logp.Err(queryStr)
+		rows, err = db.Query(queryStr)
 		if err != nil {
 			return err
 		}
@@ -198,259 +203,61 @@ func (bt *Mysqlbeat) beat(b *beat.Beat) error {
 			return err
 		}
 
-		values := make([]sql.RawBytes, len(columns))
-		scanArgs := make([]interface{}, len(values))
-
-		for i := range values {
-			scanArgs[i] = &values[i]
-		}
-
-		currentRow := 0
-		dtNow := time.Now()
-
-		event := common.MapStr{
-			"@timestamp": common.Time(dtNow),
-			"type":       b.Name,
-		}
-
-		for rows.Next() {
-			currentRow++
-			if bt.querytypes[index] == "single-row" && currentRow == 1 {
-
-				err = rows.Scan(scanArgs...)
-				if err != nil {
-					return err
+		if bt.querytypes[index] == "show-slave-delay" {
+			// Publish only slave delay
+			rows.Next()
+			event, err := bt.slaveDelay(rows, columns)
+			if err != nil {
+				logp.Debug("mysqlbeat", "Failed to get slave-delay: %v", err)
+				continue
+			}
+			b.Events.PublishEvent(event)
+		} else if bt.querytypes[index] == "single-row" {
+			// Publish only ONE row from the selection
+			rows.Next()
+			event, err := bt.singleRow(rows, columns)
+			if err != nil {
+				logp.Err("Failed to get data for single-row: %v", err)
+				continue
+			}
+			b.Events.PublishEvent(event)
+		} else {
+			if bt.querytypes[index] == "two-columns" {
+				// Publish everything in one document
+				dtNow := time.Now()
+				event := common.MapStr{
+					"@timestamp": common.Time(dtNow),
+					"type":       "two-columns",
 				}
-
-				for i, col := range values {
-					strColName := string(columns[i])
-					strColValue := string(col)
-					strColType := "string"
-
-					nColValue, err := strconv.ParseInt(strColValue, 0, 64)
-					if err == nil {
-						strColType = "int"
+				for rows.Next() {
+					attr, err := bt.twoColumns(rows, columns, dtNow)
+					if err != nil {
+						logp.Err("Failed to get data for two-columns: %v", err)
+						continue
 					}
-
-					fColValue, err := strconv.ParseFloat(strColValue, 64)
-					if err == nil {
-						if strColType == "string" {
-							strColType = "float"
-						}
-					}
-
-					if strings.HasSuffix(strColName, bt.deltawildcard) {
-						var exists bool
-						_, exists = bt.oldvalues[strColName]
-						if !exists {
-							bt.oldvaluesage[strColName] = dtNow
-
-							if strColType == "string" {
-								bt.oldvalues[strColName] = strColValue
-							} else if strColType == "int" {
-								bt.oldvalues[strColName] = nColValue
-							} else if strColType == "float" {
-								bt.oldvalues[strColName] = fColValue
-							}
-						} else {
-							if dtOld, ok := bt.oldvaluesage[strColName].(time.Time); ok {
-								delta := dtNow.Sub(dtOld)
-
-								if strColType == "int" {
-									var calcVal int64
-
-									oldVal, _ := bt.oldvalues[strColName].(int64)
-									if nColValue > oldVal {
-										var devRes float64
-										devRes = float64((nColValue - oldVal)) / float64(delta.Seconds())
-										calcVal = roundF2I(devRes, .5)
-									} else {
-										calcVal = 0
-									}
-
-									event[strColName] = calcVal
-
-									bt.oldvalues[strColName] = nColValue
-									bt.oldvaluesage[strColName] = dtNow
-								} else if strColType == "float" {
-									var calcVal float64
-
-									oldVal, _ := bt.oldvalues[strColName].(float64)
-									if fColValue > oldVal {
-										calcVal = (fColValue - oldVal) / float64(delta.Seconds())
-									} else {
-										calcVal = 0
-									}
-
-									event[strColName] = calcVal
-
-									bt.oldvalues[strColName] = fColValue
-									bt.oldvaluesage[strColName] = dtNow
-								} else {
-									event[strColName] = strColValue
-								}
-							}
-						}
-					} else {
-						if strColType == "string" {
-							event[strColName] = strColValue
-						} else if strColType == "int" {
-							event[strColName] = nColValue
-						} else if strColType == "float" {
-							event[strColName] = fColValue
-						}
-					}
-
-				}
-
-				rows.Close()
-			} else if bt.querytypes[index] == "two-columns" {
-				err = rows.Scan(scanArgs...)
-				if err != nil {
-					return err
-				}
-
-				strColName := string(values[0])
-				strColValue := string(values[1])
-				strColType := "string"
-
-				nColValue, err := strconv.ParseInt(strColValue, 0, 64)
-				if err == nil {
-					strColType = "int"
-				}
-
-				fColValue, err := strconv.ParseFloat(strColValue, 64)
-				if err == nil {
-					if strColType == "string" {
-						strColType = "float"
+					for k, v := range attr {
+						event[k] = v
 					}
 				}
-
-				if strings.HasSuffix(strColName, bt.deltawildcard) {
-					var exists bool
-					_, exists = bt.oldvalues[strColName]
-
-					if !exists {
-						bt.oldvaluesage[strColName] = dtNow
-						if strColType == "string" {
-							bt.oldvalues[strColName] = strColValue
-						} else if strColType == "int" {
-							bt.oldvalues[strColName] = nColValue
-						} else if strColType == "float" {
-							bt.oldvalues[strColName] = fColValue
-						}
-					} else {
-						if dtOld, ok := bt.oldvaluesage[strColName].(time.Time); ok {
-							delta := dtNow.Sub(dtOld)
-							if strColType == "int" {
-								var calcVal int64
-
-								oldVal, _ := bt.oldvalues[strColName].(int64)
-								if nColValue > oldVal {
-									var devRes float64
-									devRes = float64((nColValue - oldVal)) / float64(delta.Seconds())
-									calcVal = roundF2I(devRes, .5)
-
-								} else {
-									calcVal = 0
-								}
-
-								event[strColName] = calcVal
-
-								bt.oldvalues[strColName] = nColValue
-								bt.oldvaluesage[strColName] = dtNow
-							} else if strColType == "float" {
-								var calcVal float64
-
-								oldVal, _ := bt.oldvalues[strColName].(float64)
-								if fColValue > oldVal {
-									calcVal = (fColValue - oldVal) / float64(delta.Seconds())
-								} else {
-									calcVal = 0
-								}
-
-								event[strColName] = calcVal
-
-								bt.oldvalues[strColName] = fColValue
-								bt.oldvaluesage[strColName] = dtNow
-							} else {
-								event[strColName] = strColValue
-							}
-						}
-					}
-				} else {
-					if strColType == "string" {
-						event[strColName] = strColValue
-					} else if strColType == "int" {
-						event[strColName] = nColValue
-					} else if strColType == "float" {
-						event[strColName] = fColValue
-					}
-				}
-
+				b.Events.PublishEvent(event)
 			} else if bt.querytypes[index] == "multiple-rows" {
-				mevent := common.MapStr{
-					"@timestamp": common.Time(time.Now()),
-					"type":       b.Name,
-				}
-
-				err = rows.Scan(scanArgs...)
-				if err != nil {
-					return err
-				}
-
-				for i, col := range values {
-					strColValue := string(col)
-					n, err := strconv.ParseInt(strColValue, 0, 64)
-
-					if err == nil {
-						mevent[columns[i]] = n
-					} else {
-						f, err := strconv.ParseFloat(strColValue, 64)
-
-						if err == nil {
-							mevent[columns[i]] = f
-						} else {
-							mevent[columns[i]] = strColValue
-						}
+				// Publish document for each row:column.
+				for rows.Next() {
+					event, err := bt.multipleRows(rows, columns)
+					if err != nil {
+						logp.Err("Failed to get data for multiple-rows: %v",
+							err)
+						continue
 					}
-
-				}
-
-				b.Events.PublishEvent(mevent)
-				logp.Info("Event sent")
-			} else if bt.querytypes[index] == "show-slave-delay" && currentRow == 1 {
-				err = rows.Scan(scanArgs...)
-				if err != nil {
-					return err
-				}
-
-				for i, col := range values {
-					if string(columns[i]) == "Seconds_Behind_Master" {
-						strColName := string(columns[i])
-						strColValue := string(col)
-
-						nColValue, err := strconv.ParseInt(strColValue, 0, 64)
-
-						if err == nil {
-							event[strColName] = nColValue
-						}
-					}
-					rows.Close()
+					b.Events.PublishEvent(event)
 				}
 			}
-		}
-
-		if bt.querytypes[index] != "multiple-rows" && len(event) > 2 {
-			b.Events.PublishEvent(event)
-			logp.Info("Event sent")
 		}
 
 		if err = rows.Err(); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -462,4 +269,272 @@ func (bt *Mysqlbeat) Cleanup(b *beat.Beat) error {
 // Stop is a function that runs once the beat is stopped
 func (bt *Mysqlbeat) Stop() {
 	close(bt.done)
+}
+
+func (bt *Mysqlbeat) singleRow(rows *sql.Rows, columns []string) (common.MapStr, error) {
+	dtNow := time.Now()
+	event := common.MapStr{
+		"@timestamp": common.Time(dtNow),
+		"type":       "single-row",
+	}
+
+	values := make([]sql.RawBytes, len(columns))
+	scanArgs := make([]interface{}, len(values))
+
+	for i := range values {
+		scanArgs[i] = &values[i]
+	}
+
+	err := rows.Scan(scanArgs...)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, col := range values {
+		strColName := string(columns[i])
+		strColValue := string(col)
+		strColType := "string"
+
+		nColValue, err := strconv.ParseInt(strColValue, 0, 64)
+		if err == nil {
+			strColType = "int"
+		}
+
+		fColValue, err := strconv.ParseFloat(strColValue, 64)
+		if err == nil {
+			if strColType == "string" {
+				strColType = "float"
+			}
+		}
+
+		if strings.HasSuffix(strColName, bt.deltawildcard) {
+			var exists bool
+			_, exists = bt.oldvalues[strColName]
+			if !exists {
+				bt.oldvaluesage[strColName] = dtNow
+
+				if strColType == "string" {
+					bt.oldvalues[strColName] = strColValue
+				} else if strColType == "int" {
+					bt.oldvalues[strColName] = nColValue
+				} else if strColType == "float" {
+					bt.oldvalues[strColName] = fColValue
+				}
+			} else {
+				if dtOld, ok := bt.oldvaluesage[strColName].(time.Time); ok {
+					delta := dtNow.Sub(dtOld)
+
+					if strColType == "int" {
+						var calcVal int64
+
+						oldVal, _ := bt.oldvalues[strColName].(int64)
+						if nColValue > oldVal {
+							var devRes float64
+							devRes = float64((nColValue - oldVal)) / float64(delta.Seconds())
+							calcVal = roundF2I(devRes, .5)
+						} else {
+							calcVal = 0
+						}
+
+						event[strColName] = calcVal
+
+						bt.oldvalues[strColName] = nColValue
+						bt.oldvaluesage[strColName] = dtNow
+					} else if strColType == "float" {
+						var calcVal float64
+
+						oldVal, _ := bt.oldvalues[strColName].(float64)
+						if fColValue > oldVal {
+							calcVal = (fColValue - oldVal) / float64(delta.Seconds())
+						} else {
+							calcVal = 0
+						}
+
+						event[strColName] = calcVal
+
+						bt.oldvalues[strColName] = fColValue
+						bt.oldvaluesage[strColName] = dtNow
+					} else {
+						event[strColName] = strColValue
+					}
+				}
+			}
+		} else {
+			if strColType == "string" {
+				event[strColName] = strColValue
+			} else if strColType == "int" {
+				event[strColName] = nColValue
+			} else if strColType == "float" {
+				event[strColName] = fColValue
+			}
+		}
+
+	}
+	return event, nil
+}
+
+func (bt *Mysqlbeat) slaveDelay(rows *sql.Rows, columns []string) (common.MapStr, error) {
+	event := common.MapStr{
+		"@timestamp": common.Time(time.Now()),
+		"type":       "slave-delay",
+	}
+
+	values := make([]sql.RawBytes, len(columns))
+	scanArgs := make([]interface{}, len(values))
+
+	for i := range values {
+		scanArgs[i] = &values[i]
+	}
+
+	err := rows.Scan(scanArgs...)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, col := range values {
+		if string(columns[i]) == "Seconds_Behind_Master" {
+			strColName := string(columns[i])
+			strColValue := string(col)
+
+			nColValue, err := strconv.ParseInt(strColValue, 0, 64)
+
+			if err == nil {
+				event[strColName] = nColValue
+			} else {
+				logp.Debug("mysqlbeat", "Error in slaveDelay: %v", err)
+			}
+		}
+	}
+	return event, nil
+}
+
+func (bt *Mysqlbeat) multipleRows(rows *sql.Rows, columns []string) (common.MapStr, error) {
+	mevent := common.MapStr{
+		"@timestamp": common.Time(time.Now()),
+		"type":       "multiple-rows",
+	}
+
+	values := make([]sql.RawBytes, len(columns))
+	scanArgs := make([]interface{}, len(values))
+
+	for i := range values {
+		scanArgs[i] = &values[i]
+	}
+
+	err := rows.Scan(scanArgs...)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, col := range values {
+		strColValue := string(col)
+		n, err := strconv.ParseInt(strColValue, 0, 64)
+
+		if err == nil {
+			mevent[columns[i]] = n
+		} else {
+			f, err := strconv.ParseFloat(strColValue, 64)
+
+			if err == nil {
+				mevent[columns[i]] = f
+			} else {
+				mevent[columns[i]] = strColValue
+			}
+		}
+	}
+	return mevent, nil
+}
+
+func (bt *Mysqlbeat) twoColumns(rows *sql.Rows, columns []string, dtNow time.Time) (common.MapStr, error) {
+	event := common.MapStr{}
+	values := make([]sql.RawBytes, len(columns))
+	scanArgs := make([]interface{}, len(values))
+
+	for i := range values {
+		scanArgs[i] = &values[i]
+	}
+
+	err := rows.Scan(scanArgs...)
+	if err != nil {
+		return nil, err
+	}
+
+	strColName := string(values[0])
+	strColValue := string(values[1])
+	strColType := "string"
+
+	nColValue, err := strconv.ParseInt(strColValue, 0, 64)
+	if err == nil {
+		strColType = "int"
+	}
+
+	fColValue, err := strconv.ParseFloat(strColValue, 64)
+	if err == nil {
+		if strColType == "string" {
+			strColType = "float"
+		}
+	}
+
+	if strings.HasSuffix(strColName, bt.deltawildcard) {
+		var exists bool
+		_, exists = bt.oldvalues[strColName]
+
+		if !exists {
+			bt.oldvaluesage[strColName] = dtNow
+			if strColType == "string" {
+				bt.oldvalues[strColName] = strColValue
+			} else if strColType == "int" {
+				bt.oldvalues[strColName] = nColValue
+			} else if strColType == "float" {
+				bt.oldvalues[strColName] = fColValue
+			}
+		} else {
+			if dtOld, ok := bt.oldvaluesage[strColName].(time.Time); ok {
+				delta := dtNow.Sub(dtOld)
+				if strColType == "int" {
+					var calcVal int64
+
+					oldVal, _ := bt.oldvalues[strColName].(int64)
+					if nColValue > oldVal {
+						var devRes float64
+						devRes = float64((nColValue - oldVal)) / float64(delta.Seconds())
+						calcVal = roundF2I(devRes, .5)
+
+					} else {
+						calcVal = 0
+					}
+
+					event[strColName] = calcVal
+
+					bt.oldvalues[strColName] = nColValue
+					bt.oldvaluesage[strColName] = dtNow
+				} else if strColType == "float" {
+					var calcVal float64
+
+					oldVal, _ := bt.oldvalues[strColName].(float64)
+					if fColValue > oldVal {
+						calcVal = (fColValue - oldVal) / float64(delta.Seconds())
+					} else {
+						calcVal = 0
+					}
+
+					event[strColName] = calcVal
+
+					bt.oldvalues[strColName] = fColValue
+					bt.oldvaluesage[strColName] = dtNow
+				} else {
+					event[strColName] = strColValue
+				}
+			}
+		}
+	} else {
+		if strColType == "string" {
+			event[strColName] = strColValue
+		} else if strColType == "int" {
+			event[strColName] = nColValue
+		} else if strColType == "float" {
+			event[strColName] = fColValue
+		}
+	}
+	return event, nil
 }
